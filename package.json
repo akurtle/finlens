@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --import ./scripts/register-alias.mjs ./scripts/run-tests.mts",
+    "test:watch": "node --watch --experimental-strip-types --import ./scripts/register-alias.mjs ./scripts/run-tests.mts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
