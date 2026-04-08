@@ -131,10 +131,8 @@ export function DashboardShell() {
         },
         body: JSON.stringify({
           question,
-          snapshot: {
-            ...snapshot,
-            quarterly: visibleQuarters
-          }
+          symbol: snapshot.profile.symbol,
+          quarterCount
         })
       });
 

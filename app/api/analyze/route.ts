@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 
+import { fetchCompanySnapshot } from "@/lib/finance/alpha-vantage";
 import { buildFallbackAnalysis } from "@/lib/finance/analysis";
 import type { CompanySnapshot } from "@/lib/types";
 
@@ -27,16 +28,23 @@ const AnalysisSchema = z.object({
 export async function POST(request: Request) {
   const body = (await request.json()) as {
     question?: string;
-    snapshot?: CompanySnapshot;
+    symbol?: string;
+    quarterCount?: number;
   };
 
-  if (!body.question || !body.snapshot) {
-    return NextResponse.json({ error: "Question and snapshot are required." }, { status: 400 });
+  const symbol = body.symbol?.trim().toUpperCase();
+  const quarterCount = clampQuarterCount(body.quarterCount);
+
+  if (!body.question || !symbol) {
+    return NextResponse.json({ error: "Question and symbol are required." }, { status: 400 });
   }
+
+  const snapshot = await fetchCompanySnapshot(symbol);
+  const scopedSnapshot = scopeSnapshot(snapshot, quarterCount);
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json(buildFallbackAnalysis(body.question, body.snapshot));
+    return NextResponse.json(buildFallbackAnalysis(body.question, scopedSnapshot));
   }
 
   try {
@@ -61,9 +69,9 @@ export async function POST(request: Request) {
               type: "input_text",
               text: [
                 `Question: ${body.question}`,
-                `Company: ${body.snapshot.profile.symbol} - ${body.snapshot.profile.name}`,
+                `Company: ${scopedSnapshot.profile.symbol} - ${scopedSnapshot.profile.name}`,
                 "Dataset:",
-                JSON.stringify(trimSnapshot(body.snapshot), null, 2)
+                JSON.stringify(trimSnapshot(scopedSnapshot), null, 2)
               ].join("\n")
             }
           ]
@@ -77,7 +85,7 @@ export async function POST(request: Request) {
     return NextResponse.json(response.output_parsed);
   } catch (error) {
     console.error("OpenAI analysis failed, using fallback.", error);
-    return NextResponse.json(buildFallbackAnalysis(body.question, body.snapshot));
+    return NextResponse.json(buildFallbackAnalysis(body.question, scopedSnapshot));
   }
 }
 
@@ -93,5 +101,20 @@ function trimSnapshot(snapshot: CompanySnapshot) {
     metrics: snapshot.metrics,
     quarterly: snapshot.quarterly.slice(0, 8),
     annual: snapshot.annual.slice(0, 3)
+  };
+}
+
+function clampQuarterCount(value: number | undefined) {
+  if (value === 4 || value === 6 || value === 8) {
+    return value;
+  }
+
+  return 8;
+}
+
+function scopeSnapshot(snapshot: CompanySnapshot, quarterCount: number): CompanySnapshot {
+  return {
+    ...snapshot,
+    quarterly: snapshot.quarterly.slice(0, quarterCount)
   };
 }
