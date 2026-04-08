@@ -19,39 +19,24 @@ export const EMPTY_WORKSPACE: WorkspaceState = {
   updatedAt: asUtcIso()
 };
 
-export function getDeviceId() {
-  if (typeof window === "undefined") {
-    return "server";
-  }
-
-  const existing = window.localStorage.getItem("finlens-device-id");
-  if (existing) {
-    return existing;
-  }
-
-  const deviceId = crypto.randomUUID();
-  window.localStorage.setItem("finlens-device-id", deviceId);
-  return deviceId;
-}
-
 export function subscribeWorkspace(
-  deviceId: string,
+  userId: string | null,
   onChange: (workspace: WorkspaceState) => void
 ) {
   const db = getFirestoreDb();
 
-  if (!db) {
+  if (!db || !userId) {
     const loadLocal = () => onChange(readLocalWorkspace());
     loadLocal();
     window.addEventListener("storage", loadLocal);
     return () => window.removeEventListener("storage", loadLocal);
   }
 
-  const workspaceRef = doc(db, "users", deviceId, "workspace", "finlens");
+  const workspaceRef = doc(db, "users", userId, "workspace", "finlens");
 
   return onSnapshot(workspaceRef, (snapshot) => {
     if (!snapshot.exists()) {
-      void persistWorkspace(deviceId, EMPTY_WORKSPACE, db);
+      void persistWorkspace(userId, EMPTY_WORKSPACE, db);
       onChange(EMPTY_WORKSPACE);
       return;
     }
@@ -61,18 +46,18 @@ export function subscribeWorkspace(
 }
 
 export async function persistWorkspace(
-  deviceId: string,
+  userId: string | null,
   workspace: WorkspaceState,
   db = getFirestoreDb()
 ) {
   const normalized = normalizeWorkspace(workspace);
 
-  if (!db) {
+  if (!db || !userId) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
     return;
   }
 
-  await setDoc(doc(db, "users", deviceId, "workspace", "finlens"), normalized, {
+  await setDoc(doc(db, "users", userId, "workspace", "finlens"), normalized, {
     merge: true
   });
 }

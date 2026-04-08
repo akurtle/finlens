@@ -12,26 +12,34 @@ import {
 import {
   EMPTY_WORKSPACE,
   appendQueryHistory,
-  getDeviceId,
   persistWorkspace,
   subscribeWorkspace,
   updateNote,
   updateWatchlist
 } from "@/lib/firebase/workspace";
+import {
+  ensureSignedIn,
+  signInWithGoogle,
+  signOutUser,
+  subscribeUserSession
+} from "@/lib/firebase/auth";
 import type {
   AnalysisResponse,
   CompanySnapshot,
   FinancialPeriod,
   QueryHistoryItem,
   TrendMetricKey,
+  UserSession,
   WorkspaceState
 } from "@/lib/types";
+import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { cn, formatDateLabel, formatMetric, makeId } from "@/lib/utils";
 
 const DEFAULT_QUESTION = "What was the gross margin trend over 8 quarters?";
 
 export function DashboardShell() {
-  const [deviceId, setDeviceId] = useState("");
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(EMPTY_WORKSPACE);
   const [snapshot, setSnapshot] = useState<CompanySnapshot | null>(null);
   const [activeSymbol, setActiveSymbol] = useState("AAPL");
@@ -44,6 +52,7 @@ export function DashboardShell() {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [authPending, setAuthPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const deferredWatchlistQuery = useDeferredValue(watchlistQuery);
@@ -55,16 +64,27 @@ export function DashboardShell() {
 
   async function syncWorkspace(nextWorkspace: WorkspaceState) {
     setWorkspace(nextWorkspace);
-    if (deviceId) {
-      await persistWorkspace(deviceId, nextWorkspace);
-    }
+    await persistWorkspace(session?.uid ?? null, nextWorkspace);
   }
 
   useEffect(() => {
-    const nextDeviceId = getDeviceId();
-    setDeviceId(nextDeviceId);
-    return subscribeWorkspace(nextDeviceId, setWorkspace);
+    const unsubscribe = subscribeUserSession(setSession, () => setAuthReady(true));
+
+    void ensureSignedIn().catch((authError) => {
+      console.error(authError);
+      setAuthReady(true);
+    });
+
+    return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!authReady) {
+      return;
+    }
+
+    return subscribeWorkspace(session?.uid ?? null, setWorkspace);
+  }, [authReady, session?.uid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +254,7 @@ export function DashboardShell() {
             <div className="grid gap-3 sm:grid-cols-3">
               <StatPill label="Source" value={snapshot?.profile.source === "alpha-vantage" ? "Live API" : "Demo mode"} />
               <StatPill label="Tracked Quarters" value={String(visibleQuarters.length || 8)} />
-              <StatPill label="Watchlist" value={String(workspace.watchlist.length)} />
+              <StatPill label="Workspace" value={session ? (session.isAnonymous ? "Guest" : "Cloud") : "Local"} />
             </div>
           </div>
 
@@ -300,6 +320,70 @@ export function DashboardShell() {
               Load
             </button>
           </form>
+
+          <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200/70 bg-white/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Identity</p>
+              <p className="text-sm text-slate-700">
+                {isFirebaseConfigured()
+                  ? session
+                    ? session.isAnonymous
+                      ? "Signed in as guest. Your workspace syncs to an anonymous Firebase account until you upgrade."
+                      : `Signed in as ${session.email ?? session.displayName ?? "user"}.`
+                    : authReady
+                      ? "Firebase is configured, but no session is active."
+                      : "Connecting to Firebase Auth..."
+                  : "Firebase is not configured, so workspace data stays in local storage."}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setAuthPending(true);
+                  setError(null);
+                  try {
+                    await signInWithGoogle();
+                  } catch (authError) {
+                    console.error(authError);
+                    setError(
+                      authError instanceof Error
+                        ? authError.message
+                        : "Unable to sign in with Google."
+                    );
+                  } finally {
+                    setAuthPending(false);
+                  }
+                }}
+                disabled={!isFirebaseConfigured() || authPending}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {session?.isAnonymous ? "Upgrade to Google" : "Google sign-in"}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setAuthPending(true);
+                  setError(null);
+                  try {
+                    await signOutUser();
+                    await ensureSignedIn();
+                  } catch (authError) {
+                    console.error(authError);
+                    setError(
+                      authError instanceof Error ? authError.message : "Unable to sign out."
+                    );
+                  } finally {
+                    setAuthPending(false);
+                  }
+                }}
+                disabled={!isFirebaseConfigured() || !session || authPending}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 

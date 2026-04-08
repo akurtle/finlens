@@ -96,6 +96,14 @@ export type QueryHistoryItem = {
   citations: SourceCitation[];
 };
 
+export type UserSession = {
+  uid: string;
+  isAnonymous: boolean;
+  displayName: string | null;
+  email: string | null;
+  providerId: string | null;
+};
+
 export type WorkspaceState = {
   watchlist: string[];
   notes: Record<string, string>;

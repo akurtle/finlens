@@ -8,6 +8,7 @@ FinLens is a Next.js financial research dashboard that aggregates quarterly fund
 - Tailwind CSS for the UI
 - Alpha Vantage for public-market fundamentals and earnings data
 - Firebase Firestore for watchlists, notes, and query history
+- Firebase Auth for user-scoped workspace ownership
 - OpenAI Responses API for grounded natural-language analysis
 
 ## Features
@@ -16,6 +17,7 @@ FinLens is a Next.js financial research dashboard that aggregates quarterly fund
 - Parsed quarterly dataset with revenue, margins, free cash flow, leverage, and ROE
 - Filterable trend chart across 4, 6, or 8 quarters
 - Firestore-backed workspace for watchlists, per-symbol notes, and query history
+- Anonymous or Google-backed Firebase Auth session for per-user data ownership
 - LLM analysis endpoint that cites the supplied financial periods and falls back to deterministic summaries when no OpenAI key is configured
 - Demo financial dataset so the app still runs when no market-data key is present
 
@@ -46,8 +48,10 @@ FinLens is a Next.js financial research dashboard that aggregates quarterly fund
   - Enables the LLM query interface.
   - Without it, FinLens returns a grounded rule-based summary from the same parsed dataset.
 - `NEXT_PUBLIC_FIREBASE_*`
-  - Enables Firestore persistence and real-time sync.
+  - Enables Firebase Auth plus Firestore persistence and real-time sync.
   - Without these values, the app falls back to local storage so the interface remains usable.
+- `firestore.rules`
+  - Restricts workspace reads and writes to the authenticated user document path.
 
 ## Project Structure
 
