@@ -56,7 +56,10 @@ function makeQuarter(
     debtToEquity: null,
     currentRatio: null,
     roe: null,
-    revenueGrowth: null
+    revenueGrowth: null,
+    ttmRevenue: null,
+    ttmNetIncome: null,
+    ttmFreeCashFlow: null
   };
 }
 
@@ -81,6 +84,7 @@ function runParserAssertions() {
   assert.ok(Math.abs(snapshot.quarterly[0].debtToEquity! - 900 / 1100) < 0.0001);
   assert.ok(Math.abs(snapshot.quarterly[0].currentRatio! - 2) < 0.0001);
   assert.ok(Math.abs(snapshot.quarterly[0].revenueGrowth! - (1000 - 880) / 880) < 0.0001);
+  assert.equal(snapshot.quarterly[0].ttmRevenue, 1000 + 960 + 930 + 910);
   assert.equal(snapshot.metrics[0].value, 1000);
 }
 
@@ -108,7 +112,10 @@ function runLineageAssertions() {
     debtToEquity: 880 / 1320,
     currentRatio: 2,
     roe: 170 / 1320,
-    revenueGrowth: 0.12
+    revenueGrowth: 0.12,
+    ttmRevenue: 4000,
+    ttmNetIncome: 680,
+    ttmFreeCashFlow: 900
   };
 
   const citation = buildMetricCitation(period, "grossMargin");

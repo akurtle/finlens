@@ -27,8 +27,10 @@ import {
   subscribeUserSession
 } from "@/lib/firebase/auth";
 import { getMetricDefinition } from "@/lib/finance/lineage";
+import { buildDashboardMetrics } from "@/lib/finance/parser";
 import type {
   AnalysisResponse,
+  ComparisonBasis,
   CompanySnapshot,
   CompanySnapshotRecord,
   FinancialPeriod,
@@ -51,6 +53,7 @@ export function DashboardShell() {
   const [activeSymbol, setActiveSymbol] = useState("AAPL");
   const [symbolInput, setSymbolInput] = useState("AAPL");
   const [selectedMetric, setSelectedMetric] = useState<TrendMetricKey>("grossMargin");
+  const [comparisonBasis, setComparisonBasis] = useState<ComparisonBasis>("yoy");
   const [quarterCount, setQuarterCount] = useState(8);
   const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
   const [compareInput, setCompareInput] = useState("");
@@ -68,6 +71,7 @@ export function DashboardShell() {
 
   const snapshot = snapshotRecord?.snapshot ?? null;
   const cacheMeta = snapshotRecord?.cache ?? null;
+  const metricCards = snapshot ? buildDashboardMetrics(snapshot.quarterly, comparisonBasis) : [];
   const deferredWatchlistQuery = useDeferredValue(watchlistQuery);
   const visibleQuarters = snapshot?.quarterly.slice(0, quarterCount) ?? [];
   const inWatchlist = snapshot ? workspace.watchlist.includes(snapshot.profile.symbol) : false;
@@ -483,7 +487,7 @@ export function DashboardShell() {
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        {(snapshot?.metrics ?? []).map((metric) => (
+        {metricCards.map((metric) => (
           <MetricCard
             key={metric.id}
             label={metric.label}
@@ -560,6 +564,23 @@ export function DashboardShell() {
               <div className="space-y-6">
                 <div className="grid gap-4 lg:grid-cols-[1.25fr,0.75fr]">
                   <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {(["yoy", "qoq"] as const).map((basis) => (
+                        <button
+                          key={basis}
+                          type="button"
+                          onClick={() => setComparisonBasis(basis)}
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs uppercase tracking-[0.16em] transition",
+                            comparisonBasis === basis
+                              ? "border-ink bg-ink text-white"
+                              : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                          )}
+                        >
+                          {basis === "yoy" ? "YoY signals" : "QoQ signals"}
+                        </button>
+                      ))}
+                    </div>
                     <p className="max-w-3xl text-sm leading-6 text-slate-600">
                       {snapshot.profile.description}
                     </p>
@@ -578,6 +599,10 @@ export function DashboardShell() {
                       value={formatMetric(snapshot.profile.marketCap, "currency")}
                     />
                     <DetailRow
+                      label="Currency"
+                      value={snapshot.profile.currency ?? "USD"}
+                    />
+                    <DetailRow
                       label="P/E Ratio"
                       value={snapshot.profile.peRatio ? `${snapshot.profile.peRatio.toFixed(1)}x` : "N/A"}
                     />
@@ -594,6 +619,27 @@ export function DashboardShell() {
                       value={snapshot.profile.nextEarningsDate ?? "N/A"}
                     />
                   </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <MetricCard
+                    label="TTM Revenue"
+                    value={formatMetric(snapshot.quarterly[0]?.ttmRevenue ?? null, "currency")}
+                    change="Rolling four-quarter"
+                    changeLabel="top line"
+                  />
+                  <MetricCard
+                    label="TTM Net Income"
+                    value={formatMetric(snapshot.quarterly[0]?.ttmNetIncome ?? null, "currency")}
+                    change="Rolling four-quarter"
+                    changeLabel="earnings"
+                  />
+                  <MetricCard
+                    label="TTM Free Cash Flow"
+                    value={formatMetric(snapshot.quarterly[0]?.ttmFreeCashFlow ?? null, "currency")}
+                    change="Rolling four-quarter"
+                    changeLabel="cash generation"
+                  />
                 </div>
 
                 <div className="overflow-hidden rounded-[24px] border border-slate-200">

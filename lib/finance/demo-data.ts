@@ -107,7 +107,10 @@ function buildQuarter(symbol: string, date: string, index: number, seed: number)
     debtToEquity: liabilities / equity,
     currentRatio: (assets * 0.37) / (liabilities * 0.41),
     roe: netIncome / equity,
-    revenueGrowth: index < QUARTER_ENDS.length - 4 ? 0.1 - index * 0.005 : null
+    revenueGrowth: index < QUARTER_ENDS.length - 4 ? 0.1 - index * 0.005 : null,
+    ttmRevenue: null,
+    ttmNetIncome: null,
+    ttmFreeCashFlow: null
   };
 }
 
@@ -146,7 +149,10 @@ function buildAnnual(symbol: string, year: number, quarters: FinancialPeriod[]):
     debtToEquity: ratio(latest.totalLiabilities, latest.shareholderEquity),
     currentRatio: ratio(latest.currentAssets, latest.currentLiabilities),
     roe: ratio(netIncome, latest.shareholderEquity),
-    revenueGrowth: null
+    revenueGrowth: null,
+    ttmRevenue: null,
+    ttmNetIncome: null,
+    ttmFreeCashFlow: null
   };
 }
 

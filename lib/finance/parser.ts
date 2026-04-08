@@ -1,4 +1,5 @@
 import type {
+  ComparisonBasis,
   CompanyProfile,
   CompanySnapshot,
   DashboardMetric,
@@ -104,7 +105,10 @@ const EMPTY_PERIOD: Omit<FinancialPeriod, "fiscalDateEnding"> = {
   debtToEquity: null,
   currentRatio: null,
   roe: null,
-  revenueGrowth: null
+  revenueGrowth: null,
+  ttmRevenue: null,
+  ttmNetIncome: null,
+  ttmFreeCashFlow: null
 };
 
 export function parseAlphaVantageSnapshot(input: AlphaVantageSnapshotInput): CompanySnapshot {
@@ -127,7 +131,7 @@ export function parseAlphaVantageSnapshot(input: AlphaVantageSnapshotInput): Com
     profile,
     quarterly,
     annual,
-    metrics: buildMetrics(quarterly),
+    metrics: buildDashboardMetrics(quarterly),
     availableMetrics: AVAILABLE_METRICS
   };
 }
@@ -141,7 +145,7 @@ export function buildCompanySnapshot(
     profile,
     quarterly: decoratePeriods(quarterly),
     annual: decoratePeriods(annual),
-    metrics: buildMetrics(quarterly),
+    metrics: buildDashboardMetrics(quarterly),
     availableMetrics: AVAILABLE_METRICS
   };
 }
@@ -256,6 +260,7 @@ function decoratePeriods(periods: FinancialPeriod[]) {
     const revenueGrowth = yearAgo
       ? change(period.totalRevenue, yearAgo.totalRevenue)
       : null;
+    const trailingPeriods = sorted.slice(index, index + 4);
 
     return {
       ...period,
@@ -266,15 +271,34 @@ function decoratePeriods(periods: FinancialPeriod[]) {
       debtToEquity,
       currentRatio,
       roe,
-      revenueGrowth
+      revenueGrowth,
+      ttmRevenue: trailingPeriods.length === 4 ? sum(trailingPeriods.map((item) => item.totalRevenue)) : null,
+      ttmNetIncome: trailingPeriods.length === 4 ? sum(trailingPeriods.map((item) => item.netIncome)) : null,
+      ttmFreeCashFlow:
+        trailingPeriods.length === 4
+          ? sum(
+              trailingPeriods.map((item) =>
+                item.operatingCashflow === null || item.capitalExpenditures === null
+                  ? null
+                  : item.capitalExpenditures < 0
+                    ? item.operatingCashflow + item.capitalExpenditures
+                    : item.operatingCashflow - item.capitalExpenditures
+              )
+            )
+          : null
     };
   });
 }
 
-function buildMetrics(quarterly: FinancialPeriod[]): DashboardMetric[] {
+export function buildDashboardMetrics(
+  quarterly: FinancialPeriod[],
+  comparisonBasis: ComparisonBasis = "yoy"
+): DashboardMetric[] {
   const latest = quarterly[0];
   const previous = quarterly[1];
   const yearAgo = quarterly[4];
+  const baseline = comparisonBasis === "qoq" ? previous : yearAgo;
+  const changeLabel = comparisonBasis === "qoq" ? "vs prev qtr" : "vs 1Y ago";
 
   if (!latest) {
     return [];
@@ -286,50 +310,54 @@ function buildMetrics(quarterly: FinancialPeriod[]): DashboardMetric[] {
       label: "Quarter Revenue",
       value: latest.totalRevenue,
       format: "currency",
-      change: change(latest.totalRevenue, yearAgo?.totalRevenue ?? null),
-      changeLabel: "vs 1Y ago"
+      change: change(latest.totalRevenue, baseline?.totalRevenue ?? null),
+      changeLabel
     },
     {
       id: "gross-margin",
       label: "Gross Margin",
       value: latest.grossMargin,
       format: "percent",
-      change: change(latest.grossMargin, previous?.grossMargin ?? null),
-      changeLabel: "vs prev qtr"
+      change: change(latest.grossMargin, baseline?.grossMargin ?? null),
+      changeLabel
     },
     {
       id: "fcf",
       label: "Free Cash Flow",
       value: latest.freeCashFlow,
       format: "currency",
-      change: change(latest.freeCashFlow, yearAgo?.freeCashFlow ?? null),
-      changeLabel: "vs 1Y ago"
+      change: change(latest.freeCashFlow, baseline?.freeCashFlow ?? null),
+      changeLabel
     },
     {
       id: "net-margin",
       label: "Net Margin",
       value: latest.netMargin,
       format: "percent",
-      change: change(latest.netMargin, previous?.netMargin ?? null),
-      changeLabel: "vs prev qtr"
+      change: change(latest.netMargin, baseline?.netMargin ?? null),
+      changeLabel
     },
     {
       id: "debt-to-equity",
       label: "Debt / Equity",
       value: latest.debtToEquity,
       format: "multiple",
-      change: change(latest.debtToEquity, previous?.debtToEquity ?? null),
-      changeLabel: "vs prev qtr"
+      change: change(latest.debtToEquity, baseline?.debtToEquity ?? null),
+      changeLabel
     },
     {
       id: "roe",
       label: "ROE",
       value: latest.roe,
       format: "percent",
-      change: change(latest.roe, yearAgo?.roe ?? null),
-      changeLabel: "vs 1Y ago"
+      change: change(latest.roe, baseline?.roe ?? null),
+      changeLabel
     }
   ];
+}
+
+function sum(values: Array<number | null>): number {
+  return values.reduce<number>((total, value) => total + (value ?? 0), 0);
 }
 
 function toDateMap(reports: Record<string, string>[]) {

@@ -1,4 +1,5 @@
 export type MetricFormat = "currency" | "percent" | "number" | "multiple";
+export type ComparisonBasis = "qoq" | "yoy";
 
 export type TrendMetricKey =
   | "totalRevenue"
@@ -43,6 +44,9 @@ export type FinancialPeriod = {
   currentRatio: number | null;
   roe: number | null;
   revenueGrowth: number | null;
+  ttmRevenue: number | null;
+  ttmNetIncome: number | null;
+  ttmFreeCashFlow: number | null;
 };
 
 export type CompanyProfile = {
