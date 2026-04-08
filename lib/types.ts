@@ -118,3 +118,17 @@ export type CompanySnapshot = {
   annual: FinancialPeriod[];
   availableMetrics: TrendMetric[];
 };
+
+export type SnapshotCacheMeta = {
+  fetchedAt: string;
+  expiresAt: string;
+  ageMinutes: number;
+  isStale: boolean;
+  status: "fresh" | "stale" | "demo";
+  transport: "network" | "disk-cache" | "stale-cache" | "demo";
+};
+
+export type CompanySnapshotRecord = {
+  snapshot: CompanySnapshot;
+  cache: SnapshotCacheMeta;
+};

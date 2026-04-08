@@ -3,8 +3,8 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 
-import { fetchCompanySnapshot } from "@/lib/finance/alpha-vantage";
 import { buildFallbackAnalysis } from "@/lib/finance/analysis";
+import { getCompanySnapshotRecord } from "@/lib/finance/repository";
 import type { CompanySnapshot } from "@/lib/types";
 
 const AnalysisSchema = z.object({
@@ -39,8 +39,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Question and symbol are required." }, { status: 400 });
   }
 
-  const snapshot = await fetchCompanySnapshot(symbol);
-  const scopedSnapshot = scopeSnapshot(snapshot, quarterCount);
+  const snapshotRecord = await getCompanySnapshotRecord(symbol);
+  const scopedSnapshot = scopeSnapshot(snapshotRecord.snapshot, quarterCount);
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {

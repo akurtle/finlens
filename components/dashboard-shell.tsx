@@ -26,6 +26,7 @@ import {
 import type {
   AnalysisResponse,
   CompanySnapshot,
+  CompanySnapshotRecord,
   FinancialPeriod,
   QueryHistoryItem,
   TrendMetricKey,
@@ -41,7 +42,7 @@ export function DashboardShell() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(EMPTY_WORKSPACE);
-  const [snapshot, setSnapshot] = useState<CompanySnapshot | null>(null);
+  const [snapshotRecord, setSnapshotRecord] = useState<CompanySnapshotRecord | null>(null);
   const [activeSymbol, setActiveSymbol] = useState("AAPL");
   const [symbolInput, setSymbolInput] = useState("AAPL");
   const [selectedMetric, setSelectedMetric] = useState<TrendMetricKey>("grossMargin");
@@ -53,8 +54,11 @@ export function DashboardShell() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [authPending, setAuthPending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const snapshot = snapshotRecord?.snapshot ?? null;
+  const cacheMeta = snapshotRecord?.cache ?? null;
   const deferredWatchlistQuery = useDeferredValue(watchlistQuery);
   const visibleQuarters = snapshot?.quarterly.slice(0, quarterCount) ?? [];
   const inWatchlist = snapshot ? workspace.watchlist.includes(snapshot.profile.symbol) : false;
@@ -99,13 +103,13 @@ export function DashboardShell() {
           throw new Error("Unable to load financial data.");
         }
 
-        const nextSnapshot = (await response.json()) as CompanySnapshot;
+        const nextRecord = (await response.json()) as CompanySnapshotRecord;
         if (cancelled) {
           return;
         }
 
-        setSnapshot(nextSnapshot);
-        setSelectedMetric(nextSnapshot.availableMetrics[0]?.key ?? "grossMargin");
+        setSnapshotRecord(nextRecord);
+        setSelectedMetric(nextRecord.snapshot.availableMetrics[0]?.key ?? "grossMargin");
         setAnalysis(null);
       } catch (loadError) {
         console.error(loadError);
@@ -410,10 +414,47 @@ export function DashboardShell() {
             eyebrow={snapshot?.profile.industry ?? "Financial dataset"}
             actions={
               snapshot ? (
-                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                   <Tag>{snapshot.profile.exchange ?? "Exchange N/A"}</Tag>
                   <Tag>{snapshot.profile.sector ?? "Sector N/A"}</Tag>
                   <Tag>{snapshot.profile.source === "alpha-vantage" ? "Live API" : "Demo fallback"}</Tag>
+                  <Tag>{cacheMeta ? describeCache(cacheMeta) : "Loading cache"}</Tag>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!snapshot) {
+                        return;
+                      }
+
+                      setRefreshing(true);
+                      setError(null);
+
+                      try {
+                        const response = await fetch(`/api/company/${snapshot.profile.symbol}?refresh=1`);
+                        if (!response.ok) {
+                          throw new Error("Unable to refresh cached snapshot.");
+                        }
+
+                        const nextRecord = (await response.json()) as CompanySnapshotRecord;
+                        setSnapshotRecord(nextRecord);
+                        setSelectedMetric(nextRecord.snapshot.availableMetrics[0]?.key ?? selectedMetric);
+                        setAnalysis(null);
+                      } catch (refreshError) {
+                        console.error(refreshError);
+                        setError(
+                          refreshError instanceof Error
+                            ? refreshError.message
+                            : "Unable to refresh cached snapshot."
+                        );
+                      } finally {
+                        setRefreshing(false);
+                      }
+                    }}
+                    disabled={refreshing}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-slate-500 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {refreshing ? "Refreshing..." : "Refresh"}
+                  </button>
                 </div>
               ) : null
             }
@@ -879,4 +920,20 @@ function metricFormat(metric: TrendMetricKey) {
     default:
       return "currency" as const;
   }
+}
+
+function describeCache(cache: CompanySnapshotRecord["cache"]) {
+  if (cache.status === "demo") {
+    return "Demo dataset";
+  }
+
+  if (cache.isStale) {
+    return `Stale cache ${cache.ageMinutes}m old`;
+  }
+
+  if (cache.transport === "disk-cache") {
+    return `Cached ${cache.ageMinutes}m ago`;
+  }
+
+  return "Fresh network snapshot";
 }
