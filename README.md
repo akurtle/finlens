@@ -41,6 +41,13 @@ FinLens is a Next.js financial research dashboard that aggregates quarterly fund
 
 4. Open `http://localhost:3000`.
 
+## Verification
+
+- `npm test`
+  - Runs the repository's single-process financial regression checks.
+- `npm run build`
+  - Validates the production Next.js build.
+
 ## Environment Notes
 
 - `ALPHA_VANTAGE_API_KEY`
@@ -68,6 +75,17 @@ FinLens is a Next.js financial research dashboard that aggregates quarterly fund
   - Data fetching, parsing, demo data, and fallback analysis
 - `lib/firebase/`
   - Firestore initialization and workspace persistence helpers
+- `scripts/run-tests.mts`
+  - Lightweight regression checks for parser and analysis logic
+
+## CI And Deployment
+
+- GitHub Actions workflow: `.github/workflows/ci.yml`
+  - Runs `npm ci`, `npm test`, and `npm run build` on pushes and pull requests.
+- Recommended deployment target: Vercel
+  - Add the same environment variables from `.env.example` in the Vercel project settings.
+  - For live market data and grounded analysis in production, configure `ALPHA_VANTAGE_API_KEY` and `OPENAI_API_KEY`.
+  - For authenticated cloud persistence, configure the `NEXT_PUBLIC_FIREBASE_*` variables and deploy `firestore.rules`.
 
 ## Grounded Analysis Design
 
