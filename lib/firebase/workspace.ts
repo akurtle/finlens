@@ -7,8 +7,8 @@ import {
 } from "firebase/firestore";
 
 import { getFirestoreDb } from "@/lib/firebase/client";
-import type { QueryHistoryItem, WorkspaceState } from "@/lib/types";
-import { asUtcIso } from "@/lib/utils";
+import type { QueryHistoryItem, SavedResearchView, WorkspaceState } from "@/lib/types";
+import { asUtcIso, makeId } from "@/lib/utils";
 
 const STORAGE_KEY = "finlens-workspace";
 
@@ -16,6 +16,7 @@ export const EMPTY_WORKSPACE: WorkspaceState = {
   watchlist: ["AAPL", "MSFT", "NVDA"],
   notes: {},
   queryHistory: [],
+  savedViews: [],
   updatedAt: asUtcIso()
 };
 
@@ -94,6 +95,30 @@ export function appendQueryHistory(workspace: WorkspaceState, item: QueryHistory
   });
 }
 
+export function createSavedView(input: Omit<SavedResearchView, "id" | "createdAt">): SavedResearchView {
+  return {
+    ...input,
+    id: makeId("view"),
+    createdAt: asUtcIso()
+  };
+}
+
+export function upsertSavedView(workspace: WorkspaceState, view: SavedResearchView) {
+  return normalizeWorkspace({
+    ...workspace,
+    updatedAt: asUtcIso(),
+    savedViews: [view, ...workspace.savedViews.filter((item) => item.id !== view.id)].slice(0, 10)
+  });
+}
+
+export function removeSavedView(workspace: WorkspaceState, viewId: string) {
+  return normalizeWorkspace({
+    ...workspace,
+    updatedAt: asUtcIso(),
+    savedViews: workspace.savedViews.filter((item) => item.id !== viewId)
+  });
+}
+
 function readLocalWorkspace() {
   const raw = window.localStorage.getItem(STORAGE_KEY);
 
@@ -119,6 +144,10 @@ function normalizeWorkspace(workspace: Partial<WorkspaceState>): WorkspaceState 
         formula: citation.formula ?? null,
         inputs: citation.inputs ?? []
       }))
+    })),
+    savedViews: (workspace.savedViews ?? []).map((view) => ({
+      ...view,
+      compareSymbols: (view.compareSymbols ?? []).map((symbol) => symbol.toUpperCase())
     })),
     updatedAt: workspace.updatedAt ?? asUtcIso()
   };

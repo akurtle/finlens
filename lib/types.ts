@@ -99,6 +99,16 @@ export type QueryHistoryItem = {
   citations: SourceCitation[];
 };
 
+export type SavedResearchView = {
+  id: string;
+  name: string;
+  primarySymbol: string;
+  compareSymbols: string[];
+  metric: TrendMetricKey;
+  quarterCount: number;
+  createdAt: string;
+};
+
 export type UserSession = {
   uid: string;
   isAnonymous: boolean;
@@ -111,6 +121,7 @@ export type WorkspaceState = {
   watchlist: string[];
   notes: Record<string, string>;
   queryHistory: QueryHistoryItem[];
+  savedViews: SavedResearchView[];
   updatedAt: string;
 };
 

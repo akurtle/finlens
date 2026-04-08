@@ -12,8 +12,11 @@ import {
 import {
   EMPTY_WORKSPACE,
   appendQueryHistory,
+  createSavedView,
   persistWorkspace,
+  removeSavedView,
   subscribeWorkspace,
+  upsertSavedView,
   updateNote,
   updateWatchlist
 } from "@/lib/firebase/workspace";
@@ -30,6 +33,7 @@ import type {
   CompanySnapshotRecord,
   FinancialPeriod,
   QueryHistoryItem,
+  SavedResearchView,
   TrendMetricKey,
   UserSession,
   WorkspaceState
@@ -48,6 +52,10 @@ export function DashboardShell() {
   const [symbolInput, setSymbolInput] = useState("AAPL");
   const [selectedMetric, setSelectedMetric] = useState<TrendMetricKey>("grossMargin");
   const [quarterCount, setQuarterCount] = useState(8);
+  const [compareSymbols, setCompareSymbols] = useState<string[]>([]);
+  const [compareInput, setCompareInput] = useState("");
+  const [compareRecords, setCompareRecords] = useState<CompanySnapshotRecord[]>([]);
+  const [compareLoading, setCompareLoading] = useState(false);
   const [watchlistQuery, setWatchlistQuery] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [question, setQuestion] = useState(DEFAULT_QUESTION);
@@ -110,7 +118,11 @@ export function DashboardShell() {
         }
 
         setSnapshotRecord(nextRecord);
-        setSelectedMetric(nextRecord.snapshot.availableMetrics[0]?.key ?? "grossMargin");
+        setSelectedMetric((current) =>
+          nextRecord.snapshot.availableMetrics.some((metric) => metric.key === current)
+            ? current
+            : (nextRecord.snapshot.availableMetrics[0]?.key ?? "grossMargin")
+        );
         setAnalysis(null);
       } catch (loadError) {
         console.error(loadError);
@@ -137,6 +149,55 @@ export function DashboardShell() {
     const symbol = snapshot?.profile.symbol;
     setNoteDraft(symbol ? workspace.notes[symbol] ?? "" : "");
   }, [snapshot?.profile.symbol, workspace.notes]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!compareSymbols.length) {
+        setCompareRecords([]);
+        return;
+      }
+
+      setCompareLoading(true);
+
+      try {
+        const records = await Promise.all(
+          compareSymbols.map(async (symbol) => {
+            const response = await fetch(`/api/company/${symbol}`);
+            if (!response.ok) {
+              throw new Error(`Unable to load comparison data for ${symbol}.`);
+            }
+
+            return (await response.json()) as CompanySnapshotRecord;
+          })
+        );
+
+        if (!cancelled) {
+          setCompareRecords(records);
+        }
+      } catch (compareError) {
+        console.error(compareError);
+        if (!cancelled) {
+          setError(
+            compareError instanceof Error
+              ? compareError.message
+              : "Unable to load comparison data."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setCompareLoading(false);
+        }
+      }
+    }
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [compareSymbols]);
 
   async function handleRunAnalysis(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -229,6 +290,35 @@ export function DashboardShell() {
     startTransition(() => {
       setActiveSymbol(item.symbol);
       setSymbolInput(item.symbol);
+    });
+  }
+
+  function applyCompareInput() {
+    const symbols = parseSymbolList(compareInput, activeSymbol);
+    setCompareSymbols(symbols);
+    setCompareInput(symbols.join(", "));
+  }
+
+  async function handleSaveView() {
+    const view = createSavedView({
+      name: `${activeSymbol} ${selectedMetric} ${quarterCount}Q`,
+      primarySymbol: activeSymbol,
+      compareSymbols,
+      metric: selectedMetric,
+      quarterCount
+    });
+
+    await syncWorkspace(upsertSavedView(workspace, view));
+  }
+
+  function restoreSavedView(view: SavedResearchView) {
+    startTransition(() => {
+      setActiveSymbol(view.primarySymbol);
+      setSymbolInput(view.primarySymbol);
+      setSelectedMetric(view.metric);
+      setQuarterCount(view.quarterCount);
+      setCompareSymbols(view.compareSymbols);
+      setCompareInput(view.compareSymbols.join(", "));
     });
   }
 
@@ -542,6 +632,69 @@ export function DashboardShell() {
             ) : null}
           </Panel>
 
+          <Panel title="Compare Mode" eyebrow="Side-by-side signal across your shortlist">
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={compareInput}
+                  onChange={(event) => setCompareInput(event.target.value)}
+                  placeholder="MSFT, NVDA"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-accent focus:bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={applyCompareInput}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+                >
+                  Compare
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveView}
+                  className="rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
+                >
+                  Save view
+                </button>
+              </div>
+
+              <div className="overflow-hidden rounded-[24px] border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Symbol</th>
+                      <th className="px-4 py-3">Revenue</th>
+                      <th className="px-4 py-3">Gross Margin</th>
+                      <th className="px-4 py-3">FCF</th>
+                      <th className="px-4 py-3">ROE</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {[snapshotRecord, ...compareRecords]
+                      .filter((record): record is CompanySnapshotRecord => Boolean(record))
+                      .map((record) => {
+                        const latest = record.snapshot.quarterly[0];
+                        return (
+                          <tr key={record.snapshot.profile.symbol} className="hover:bg-slate-50/80">
+                            <td className="px-4 py-3 font-[var(--font-mono)] text-xs text-slate-600">
+                              {record.snapshot.profile.symbol}
+                            </td>
+                            <td className="px-4 py-3">{formatMetric(latest?.totalRevenue ?? null, "currency")}</td>
+                            <td className="px-4 py-3">{formatMetric(latest?.grossMargin ?? null, "percent")}</td>
+                            <td className="px-4 py-3">{formatMetric(latest?.freeCashFlow ?? null, "currency")}</td>
+                            <td className="px-4 py-3">{formatMetric(latest?.roe ?? null, "percent")}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+
+              {compareLoading ? (
+                <p className="text-sm text-slate-500">Loading comparison set...</p>
+              ) : null}
+            </div>
+          </Panel>
+
           <Panel title="LLM Query Interface" eyebrow="Grounded analysis from parsed company data">
             <form onSubmit={handleRunAnalysis} className="space-y-4">
               <textarea
@@ -627,6 +780,49 @@ export function DashboardShell() {
         </div>
 
         <div className="space-y-6">
+          <Panel title="Saved Views" eyebrow="Reusable research setups">
+            <div className="space-y-3">
+              {workspace.savedViews.length ? (
+                workspace.savedViews.map((view) => (
+                  <div
+                    key={view.id}
+                    className="rounded-[24px] border border-slate-200 bg-white px-4 py-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => restoreSavedView(view)}
+                        className="text-left"
+                      >
+                        <p className="text-sm font-medium text-slate-900">{view.name}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">
+                          {view.primarySymbol}
+                          {view.compareSymbols.length ? ` vs ${view.compareSymbols.join(", ")}` : ""}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await syncWorkspace(removeSavedView(workspace, view.id));
+                        }}
+                        className="text-xs uppercase tracking-[0.16em] text-slate-400 transition hover:text-slate-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {view.metric} | {view.quarterCount} quarters
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
+                  Save the current compare setup to reuse it later.
+                </p>
+              )}
+            </div>
+          </Panel>
+
           <Panel title="Watchlist" eyebrow="Firestore-backed workspace">
             <div className="space-y-4">
               <input
@@ -1006,4 +1202,15 @@ function buildLineageInputs(period: FinancialPeriod, metric: TrendMetricKey) {
     label: input.label,
     value: formatMetric(period[input.field] as number | null, input.format, { compact: false })
   }));
+}
+
+function parseSymbolList(value: string, primarySymbol: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((item) => item.trim().toUpperCase())
+        .filter((item) => item && item !== primarySymbol)
+    )
+  ).slice(0, 3);
 }
