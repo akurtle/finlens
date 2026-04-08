@@ -23,6 +23,7 @@ import {
   signOutUser,
   subscribeUserSession
 } from "@/lib/firebase/auth";
+import { getMetricDefinition } from "@/lib/finance/lineage";
 import type {
   AnalysisResponse,
   CompanySnapshot,
@@ -473,6 +474,12 @@ export function DashboardShell() {
                       {snapshot.profile.description}
                     </p>
                     <TrendChart periods={visibleQuarters} metric={selectedMetric} />
+                    {snapshot ? (
+                      <MetricLineageCard
+                        period={snapshot.quarterly[0]}
+                        metric={selectedMetric}
+                      />
+                    ) : null}
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -589,6 +596,23 @@ export function DashboardShell() {
                       >
                         <p className="text-sm font-medium text-slate-900">{citation.label}</p>
                         <p className="mt-1 text-sm text-slate-600">{citation.detail}</p>
+                        {citation.formula ? (
+                          <p className="mt-2 text-xs text-slate-500">
+                            Formula: <span className="font-[var(--font-mono)]">{citation.formula}</span>
+                          </p>
+                        ) : null}
+                        {citation.inputs.length ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {citation.inputs.map((input) => (
+                              <span
+                                key={`${citation.label}-${input.label}`}
+                                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600"
+                              >
+                                {input.label}: {input.value}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">
                           {citation.source}
                           {citation.period ? ` | ${citation.period}` : ""}
@@ -849,6 +873,9 @@ function TrendChart({
           <h3 className="mt-1 font-[var(--font-heading)] text-xl font-semibold text-ink">
             {metricLabel(metric)}
           </h3>
+          <p className="mt-2 max-w-xl text-xs text-slate-500">
+            {getMetricDefinition(metric).formula}
+          </p>
         </div>
         <p className="text-xs text-slate-500">
           Latest: {formatMetric(points[0]?.value ?? null, metricFormat(metric))}
@@ -936,4 +963,47 @@ function describeCache(cache: CompanySnapshotRecord["cache"]) {
   }
 
   return "Fresh network snapshot";
+}
+
+function MetricLineageCard({
+  period,
+  metric
+}: {
+  period: FinancialPeriod | undefined;
+  metric: TrendMetricKey;
+}) {
+  if (!period) {
+    return null;
+  }
+
+  const definition = getMetricDefinition(metric);
+
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white/80 p-4">
+      <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Lineage</p>
+      <h4 className="mt-2 font-[var(--font-heading)] text-lg font-semibold text-ink">
+        {definition.label} calculation
+      </h4>
+      <p className="mt-2 text-sm text-slate-600">
+        Latest quarter {period.fiscalDateEnding} uses <span className="font-[var(--font-mono)]">{definition.formula}</span>.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {buildLineageInputs(period, metric).map((input) => (
+          <span
+            key={`${metric}-${input.label}`}
+            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600"
+          >
+            {input.label}: {input.value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildLineageInputs(period: FinancialPeriod, metric: TrendMetricKey) {
+  return getMetricDefinition(metric).inputs.map((input) => ({
+    label: input.label,
+    value: formatMetric(period[input.field] as number | null, input.format, { compact: false })
+  }));
 }

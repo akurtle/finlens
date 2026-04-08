@@ -112,7 +112,14 @@ function normalizeWorkspace(workspace: Partial<WorkspaceState>): WorkspaceState 
   return {
     watchlist: Array.from(new Set((workspace.watchlist ?? EMPTY_WORKSPACE.watchlist).map((item) => item.toUpperCase()))),
     notes: workspace.notes ?? {},
-    queryHistory: workspace.queryHistory ?? [],
+    queryHistory: (workspace.queryHistory ?? []).map((item) => ({
+      ...item,
+      citations: (item.citations ?? []).map((citation) => ({
+        ...citation,
+        formula: citation.formula ?? null,
+        inputs: citation.inputs ?? []
+      }))
+    })),
     updatedAt: workspace.updatedAt ?? asUtcIso()
   };
 }

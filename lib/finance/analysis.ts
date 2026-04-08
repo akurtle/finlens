@@ -1,4 +1,5 @@
-import type { AnalysisResponse, CompanySnapshot, SourceCitation, TrendMetricKey } from "@/lib/types";
+import { buildMetricCitation, getMetricDefinition } from "@/lib/finance/lineage";
+import type { AnalysisResponse, CompanySnapshot, TrendMetricKey } from "@/lib/types";
 import { formatMetric } from "@/lib/utils";
 
 const METRIC_KEYWORDS: Array<{ key: TrendMetricKey; keywords: string[]; label: string }> = [
@@ -45,9 +46,9 @@ export function buildFallbackAnalysis(question: string, snapshot: CompanySnapsho
     keyPoints: [
       `Latest quarter: ${formatMetric(latest.value, metricFormat(selected.key))} on ${latest.period.fiscalDateEnding}.`,
       `Earliest quarter in view: ${formatMetric(oldest.value, metricFormat(selected.key))} on ${oldest.period.fiscalDateEnding}.`,
-      `Direction over the period: ${direction}.`
+      `Formula: ${getMetricDefinition(selected.key).formula}.`
     ],
-    citations: values.slice(0, 4).map((entry) => citationForMetric(entry.period, selected.key)),
+    citations: values.slice(0, 4).map((entry) => buildMetricCitation(entry.period, selected.key)),
     confidence: snapshot.profile.source === "alpha-vantage" ? "medium" : "low"
   };
 }
@@ -61,23 +62,8 @@ function pickMetric(question: string) {
   );
 }
 
-function citationForMetric(
-  period: CompanySnapshot["quarterly"][number],
-  metric: TrendMetricKey
-): SourceCitation {
-  return {
-    label: `${period.fiscalDateEnding} ${metric}`,
-    detail: `${metricLabel(metric)} was ${formatMetric(period[metric], metricFormat(metric), { compact: false })}.`,
-    source: "Parsed financial dataset",
-    period: period.fiscalDateEnding,
-    metric: metricLabel(metric),
-    value: formatMetric(period[metric], metricFormat(metric), { compact: false })
-  };
-}
-
 function metricLabel(metric: TrendMetricKey) {
-  const match = METRIC_KEYWORDS.find((item) => item.key === metric);
-  return match?.label ?? metric;
+  return getMetricDefinition(metric).label;
 }
 
 function metricFormat(metric: TrendMetricKey) {

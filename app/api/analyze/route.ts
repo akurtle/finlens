@@ -18,7 +18,14 @@ const AnalysisSchema = z.object({
         source: z.string(),
         period: z.string().nullable(),
         metric: z.string().nullable(),
-        value: z.string().nullable()
+        value: z.string().nullable(),
+        formula: z.string().nullable(),
+        inputs: z.array(
+          z.object({
+            label: z.string(),
+            value: z.string()
+          })
+        )
       })
     )
     .max(6),
@@ -70,6 +77,8 @@ export async function POST(request: Request) {
               text: [
                 `Question: ${body.question}`,
                 `Company: ${scopedSnapshot.profile.symbol} - ${scopedSnapshot.profile.name}`,
+                "Metric Catalog:",
+                JSON.stringify(scopedSnapshot.availableMetrics, null, 2),
                 "Dataset:",
                 JSON.stringify(trimSnapshot(scopedSnapshot), null, 2)
               ].join("\n")

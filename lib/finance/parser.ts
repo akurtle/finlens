@@ -11,55 +11,64 @@ export const AVAILABLE_METRICS: TrendMetric[] = [
     key: "totalRevenue",
     label: "Revenue",
     format: "currency",
-    description: "Top-line revenue by quarter."
+    description: "Top-line revenue by quarter.",
+    formula: "Reported totalRevenue field from the income statement."
   },
   {
     key: "grossMargin",
     label: "Gross Margin",
     format: "percent",
-    description: "Gross profit divided by revenue."
+    description: "Gross profit divided by revenue.",
+    formula: "grossProfit / totalRevenue"
   },
   {
     key: "operatingMargin",
     label: "Operating Margin",
     format: "percent",
-    description: "Operating income divided by revenue."
+    description: "Operating income divided by revenue.",
+    formula: "operatingIncome / totalRevenue"
   },
   {
     key: "netIncome",
     label: "Net Income",
     format: "currency",
-    description: "Bottom-line profitability by quarter."
+    description: "Bottom-line profitability by quarter.",
+    formula: "Reported netIncome field from the income statement."
   },
   {
     key: "eps",
     label: "EPS",
     format: "number",
-    description: "Diluted earnings per share."
+    description: "Diluted earnings per share.",
+    formula: "Reported diluted EPS field for the period."
   },
   {
     key: "freeCashFlow",
     label: "Free Cash Flow",
     format: "currency",
-    description: "Operating cash flow less capital spending."
+    description: "Operating cash flow less capital spending.",
+    formula: "operatingCashflow - capitalExpenditures"
   },
   {
     key: "currentRatio",
     label: "Current Ratio",
     format: "multiple",
-    description: "Current assets divided by current liabilities."
+    description: "Current assets divided by current liabilities.",
+    formula: "currentAssets / currentLiabilities"
   },
   {
     key: "debtToEquity",
     label: "Debt / Equity",
     format: "multiple",
-    description: "Total liabilities divided by shareholder equity."
+    description: "Total liabilities divided by shareholder equity.",
+    formula: "totalLiabilities / shareholderEquity"
   },
   {
     key: "roe",
     label: "ROE",
     format: "percent",
-    description: "Net income divided by shareholder equity."
+    description: "Net income divided by shareholder equity.",
+    formula: "netIncome / shareholderEquity"
   }
 ];
 

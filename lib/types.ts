@@ -16,6 +16,7 @@ export type TrendMetric = {
   label: string;
   format: MetricFormat;
   description: string;
+  formula: string;
 };
 
 export type FinancialPeriod = {
@@ -78,6 +79,8 @@ export type SourceCitation = {
   period: string | null;
   metric: string | null;
   value: string | null;
+  formula: string | null;
+  inputs: Array<{ label: string; value: string }>;
 };
 
 export type AnalysisResponse = {
